@@ -150,8 +150,11 @@ def run_baseline(inv_df, dest_df, delay_days=0, capacity_multiplier=1.0, demand_
         b_id = b_row["batch_id"]
         produce = b_row["produce"]
         shelf_life = b_row["shelf_life_days"]
-        
+
         matching_dests = dest[dest["produce"] == produce]
+        matching_dests = matching_dests[
+            matching_dests["effective_travel_time"] < shelf_life
+        ]
         for _, d_row in matching_dests.iterrows():
             d_id = d_row["destination_id"]
             avail_inv = inv_remaining.get(b_id, 0)
