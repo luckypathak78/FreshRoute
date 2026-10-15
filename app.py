@@ -411,16 +411,70 @@ def main():
             width="stretch"
         )
 
+    with tab5:
+        st.header("📘 FreshRoute Documentation")
 
-        
-
-        st.subheader("Metric Definitions")
         st.markdown("""
-        - **Demand Fulfillment Percentage:** Quantity Delivered / Total Demand × 100
-        - **Unsold Inventory Percentage:** Unsold Inventory / Initial Inventory × 100
-        - **Net Revenue:** Gross Revenue − Discount Amount − Transport Costs
-        - **Quantity at Expiry Risk:** Quantity allocated to shipments whose travel time is greater than or equal to shelf life.
+        ### About FreshRoute
+
+        FreshRoute is a data-driven agricultural produce allocation
+        application designed to reduce waste and improve distribution
+        efficiency for perishable produce.
+
+        ### Problem Statement
+
+        Agricultural produce can spoil before reaching its destination.
+        Inefficient allocation, transportation delays, limited capacity,
+        and changing demand can contribute to food waste and lost revenue.
+
+        ### Proposed Solution
+
+        FreshRoute compares a First-In, First-Out (FIFO) baseline
+        against an optimized allocation strategy.
+
+        The application considers inventory, destination demand,
+        transportation time, shelf life, and capacity constraints.
+
+        ### Technology Stack
+
+        - Python
+        - Streamlit
+        - Pandas
+        - NumPy
+        - Plotly
+
+        ### Performance Metrics
+
+        The application compares the baseline and optimized strategies
+        using the following metrics.
         """)
+
+        st.subheader("📊 Metric Definitions")
+
+        st.markdown("""
+        - **Initial Inventory:** Total quantity of produce available.
+        - **Total Demand:** Total quantity requested by destinations.
+        - **Quantity Dispatched:** Quantity allocated for transportation.
+        - **Quantity Delivered:** Quantity successfully delivered.
+        - **Demand Fulfillment (%):** Quantity delivered divided by
+          total demand, multiplied by 100.
+        - **Unsold Inventory (kg):** Produce remaining unsold.
+        - **Unsold Inventory (%):** Unsold inventory divided by
+          initial inventory, multiplied by 100.
+        - **Gross Revenue:** Revenue generated before deductions.
+        - **Discount Amount:** Revenue reduction from applied discounts.
+        - **Transport Costs:** Estimated transportation expenses.
+        - **Net Revenue:** Gross revenue minus discounts and
+          transportation costs.
+        - **Quantity at Expiry Risk:** Quantity identified as being
+          at risk of expiring during transportation.
+        """)
+
+        st.info(
+            "Use the Baseline Comparison tab to compare "
+            "FIFO and FreshRoute performance."
+        )
+        
 
 
 if __name__ == "__main__":
