@@ -2,6 +2,11 @@
 
 FreshRoute is a Python-based decision-support application that helps optimize the distribution of perishable agricultural produce. It compares a basic FIFO (First-In, First-Out) allocation strategy with a greedy optimization approach to support better allocation decisions.
 
+### 🚀 Live Demo
+
+**Try FreshRoute here:** [Launch FreshRoute](https://freshroute-glnnvcyqd4ktmvtrmu6trc.streamlit.app/)
+
+
 ## 🎯 Problem Statement
 
 Perishable agricultural products can lose value when distribution is delayed or inventory is allocated inefficiently. FreshRoute explores how inventory, destination demand, transport capacity, travel time, and shelf life can influence distribution decisions.
