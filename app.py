@@ -195,37 +195,72 @@ def run_baseline(inv_df, dest_df, delay_days=0, capacity_multiplier=1.0, demand_
 # -----------------------------------------------------------------------------
 # 3. METRIC CALCULATIONS
 # -----------------------------------------------------------------------------
+
 def calculate_metrics(inv_df, dest_df, alloc_df, inv_remaining_dict, demand_multiplier=1.0):
     initial_inventory = inv_df["quantity_kg"].sum()
     total_demand = (dest_df["demand_kg"] * demand_multiplier).sum()
-    
-    qty_dispatched = alloc_df["allocated_qty_kg"].sum() if not alloc_df.empty else 0.0
-    qty_delivered = qty_dispatched  # Assuming delivered successfully if travel time < shelf life
-    
-    fulfillment_pct = (qty_delivered / total_demand * 100) if total_demand > 0 else 0.0
-    
-    # Spoilage: Unsold inventory remaining + produce dropped due to expiry/infeasible routes
-    unsold_inventory = sum(inv_remaining_dict.values())
-    spoilage_qty = unsold_inventory
-    spoilage_pct = (spoilage_qty / initial_inventory * 100) if initial_inventory > 0 else 0.0
-    
-    # Financials
+
+    qty_dispatched = (
+        alloc_df["allocated_qty_kg"].sum()
+        if not alloc_df.empty else 0.0
+    )
+
+    # A shipment is feasible if it can arrive before its shelf life ends.
     if not alloc_df.empty:
-        transport_costs = (alloc_df["allocated_qty_kg"] * alloc_df["transport_cost_per_kg"]).sum()
-        gross_revenue = (alloc_df["allocated_qty_kg"] * alloc_df["selling_price_per_kg"]).sum()
-        discount_amount = (alloc_df["allocated_qty_kg"] * alloc_df["selling_price_per_kg"] * alloc_df["discount_pct"]).sum()
-        net_revenue = gross_revenue - discount_amount - transport_costs
+        arrival_feasible = (
+            alloc_df["travel_time_days"] < alloc_df["shelf_life_days"]
+        )
+        feasible_allocations = alloc_df[arrival_feasible]
+        at_risk_allocations = alloc_df[~arrival_feasible]
+
+        qty_delivered = feasible_allocations["allocated_qty_kg"].sum()
+        qty_at_expiry_risk = at_risk_allocations["allocated_qty_kg"].sum()
+
+        # Costs are incurred for every dispatched allocation.
+        transport_costs = (
+            alloc_df["allocated_qty_kg"]
+            * alloc_df["transport_cost_per_kg"]
+        ).sum()
+
+        # Count revenue only for quantities estimated to arrive in time.
+        gross_revenue = (
+            feasible_allocations["allocated_qty_kg"]
+            * feasible_allocations["selling_price_per_kg"]
+        ).sum()
+
+        discount_amount = (
+            feasible_allocations["allocated_qty_kg"]
+            * feasible_allocations["selling_price_per_kg"]
+            * feasible_allocations["discount_pct"]
+        ).sum()
     else:
+        qty_delivered = 0.0
+        qty_at_expiry_risk = 0.0
         transport_costs = 0.0
         gross_revenue = 0.0
         discount_amount = 0.0
-        net_revenue = 0.0
-        
+
+    fulfillment_pct = (
+        qty_delivered / total_demand * 100
+        if total_demand > 0 else 0.0
+    )
+
+    # Remaining stock is unsold, not necessarily expired.
+    unsold_inventory = sum(inv_remaining_dict.values())
+    spoilage_qty = unsold_inventory
+    spoilage_pct = (
+        spoilage_qty / initial_inventory * 100
+        if initial_inventory > 0 else 0.0
+    )
+
+    net_revenue = gross_revenue - discount_amount - transport_costs
+
     return {
         "initial_inventory": initial_inventory,
         "total_demand": total_demand,
         "qty_dispatched": qty_dispatched,
         "qty_delivered": qty_delivered,
+        "qty_at_expiry_risk": qty_at_expiry_risk,
         "fulfillment_pct": fulfillment_pct,
         "spoilage_qty": spoilage_qty,
         "spoilage_pct": spoilage_pct,
@@ -234,6 +269,7 @@ def calculate_metrics(inv_df, dest_df, alloc_df, inv_remaining_dict, demand_mult
         "discount_amount": discount_amount,
         "net_revenue": net_revenue
     }
+
 
 # -----------------------------------------------------------------------------
 # 4. STREAMLIT DASHBOARD INTERFACE
@@ -321,17 +357,19 @@ def main():
             st.dataframe(at_risk[["batch_id", "produce", "destination_id", "allocated_qty_kg", "shelf_life_days", "discount_pct"]], use_container_width=True)
         else:
             st.success("No active discount recommendations required for current allocations.")
-
     with tab4:
         st.subheader("Baseline vs. Optimized Side-by-Side Table")
-        comparison_table = pd.DataFrame({
-            "Performance Metric": [
+
+        comparison_df = pd.DataFrame({
+            "Metric": [
                 "Initial Inventory (kg)",
                 "Total Demand (kg)",
                 "Quantity Dispatched (kg)",
+                "Quantity Delivered (kg)",
+                "Quantity at Expiry Risk (kg)",
                 "Demand Fulfillment (%)",
-                "Spoilage Quantity (kg)",
-                "Spoilage Percentage (%)",
+                "Unsold Inventory (kg)",
+                "Unsold Inventory (%)",
                 "Gross Revenue ($)",
                 "Discount Amount ($)",
                 "Transport Costs ($)",
@@ -341,43 +379,49 @@ def main():
                 base_metrics["initial_inventory"],
                 base_metrics["total_demand"],
                 base_metrics["qty_dispatched"],
-                f"{base_metrics['fulfillment_pct']:.2f}%",
+                base_metrics["qty_delivered"],
+                base_metrics["qty_at_expiry_risk"],
+                base_metrics["fulfillment_pct"],
                 base_metrics["spoilage_qty"],
-                f"{base_metrics['spoilage_pct']:.2f}%",
-                f"${base_metrics['gross_revenue']:,.2f}",
-                f"${base_metrics['discount_amount']:,.2f}",
-                f"${base_metrics['transport_costs']:,.2f}",
-                f"${base_metrics['net_revenue']:,.2f}"
+                base_metrics["spoilage_pct"],
+                base_metrics["gross_revenue"],
+                base_metrics["discount_amount"],
+                base_metrics["transport_costs"],
+                base_metrics["net_revenue"]
             ],
             "Optimized (FreshRoute)": [
                 opt_metrics["initial_inventory"],
                 opt_metrics["total_demand"],
                 opt_metrics["qty_dispatched"],
-                f"{opt_metrics['fulfillment_pct']:.2f}%",
+                opt_metrics["qty_delivered"],
+                opt_metrics["qty_at_expiry_risk"],
+                opt_metrics["fulfillment_pct"],
                 opt_metrics["spoilage_qty"],
-                f"{opt_metrics['spoilage_pct']:.2f}%",
-                f"${opt_metrics['gross_revenue']:,.2f}",
-                f"${opt_metrics['discount_amount']:,.2f}",
-                f"${opt_metrics['transport_costs']:,.2f}",
-                f"${opt_metrics['net_revenue']:,.2f}"
+                opt_metrics["spoilage_pct"],
+                opt_metrics["gross_revenue"],
+                opt_metrics["discount_amount"],
+                opt_metrics["transport_costs"],
+                opt_metrics["net_revenue"]
             ]
         })
-        st.table(comparison_table)
 
-    with tab5:
-        st.subheader("Algorithm Description & Limitations")
-        st.markdown("""
-        - **Algorithm Type:** Deterministic Greedy Priority Allocation.
-        - **Logic:** Sorts inventory batches by shelf-life urgency (ascending) and unit cost, matches them with destination demand, filters out infeasible routes where travel time exceeds shelf life, and prioritizes routes yielding the highest net margin per kg.
-        - **Limitations:** This is a greedy heuristic rather than a global mixed-integer linear programming (MILP) optimum. While computationally fast and explainable, it may miss globally optimal multi-destination trade-offs.
-        """)
+        st.dataframe(
+            comparison_df,
+            hide_index=True,
+            width="stretch"
+        )
+
+
         
+
         st.subheader("Metric Definitions")
         st.markdown("""
-        - **Demand Fulfillment Percentage:** $\\frac{\\text{Quantity Delivered}}{\\text{Total Demand}} \\times 100$
-        - **Spoilage Percentage:** $\\frac{\\text{Unsold Inventory}}{\\text{Initial Inventory}} \\times 100$
-        - **Net Revenue:** $\\text{Gross Revenue} - \\text{Discount Amount} - \\text{Transport Costs}$
+        - **Demand Fulfillment Percentage:** Quantity Delivered / Total Demand × 100
+        - **Unsold Inventory Percentage:** Unsold Inventory / Initial Inventory × 100
+        - **Net Revenue:** Gross Revenue − Discount Amount − Transport Costs
+        - **Quantity at Expiry Risk:** Quantity allocated to shipments whose travel time is greater than or equal to shelf life.
         """)
+
 
 if __name__ == "__main__":
     main()
